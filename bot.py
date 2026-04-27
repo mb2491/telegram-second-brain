@@ -40,6 +40,39 @@ Poi aggiungi:
 
 Usa l'italiano. Il titolo deve essere utile per ricerche future."""
 
+TOREAD_PROMPT = """Sei un assistente che salva link da leggere in Obsidian (Markdown).
+
+Ricevi un URL e opzionalmente una descrizione dell'utente.
+Rispondi SOLO con il contenuto markdown, niente altro.
+
+Il frontmatter deve essere ESATTAMENTE:
+---
+tags: [toread]
+date: {date}
+url: {url}
+status: pending
+---
+
+Poi aggiungi:
+# Titolo descrittivo (deducilo dall'URL o dalla descrizione)
+
+## Note
+(includi solo se l'utente ha aggiunto una descrizione — altrimenti ometti la sezione)
+
+Usa l'italiano."""
+
+URL_RE = re.compile(r'https?://\S+')
+
+
+def extract_url(text: str) -> tuple[str | None, str]:
+    """Estrae il primo URL dal testo. Restituisce (url, testo_rimanente)."""
+    match = URL_RE.search(text)
+    if not match:
+        return None, text
+    url = match.group()
+    rest = (text[:match.start()] + text[match.end():]).strip()
+    return url, rest
+
 
 def extract_tag(text: str | None) -> tuple[str, str]:
     """Prima parola = tag, resto = contenuto da strutturare."""
@@ -85,8 +118,9 @@ async def save_and_reply(update: Update, content: str, date: str):
     slug = re.sub(r"\s+", "-", slug).lower()[:50]
     filename = f"{date}_{slug}.md"
 
-    VAULT_PATH.mkdir(parents=True, exist_ok=True)
-    (VAULT_PATH / filename).write_text(content, encoding="utf-8")
+    notes_dir = VAULT_PATH / "note"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    (notes_dir / filename).write_text(content, encoding="utf-8")
 
     preview = content[:500] + ("..." if len(content) > 500 else "")
     await update.message.reply_text(f"Salvato: {filename}\n\n{preview}")
@@ -96,12 +130,30 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(str(update.effective_chat.id)):
         return
 
-    tag, body = extract_tag(update.message.text)
-    await update.message.reply_text(f"Strutturando [{tag}]...")
     date = datetime.now().strftime("%Y-%m-%d")
+    text = update.message.text
+
+    url, rest = extract_url(text)
+    if url:
+        await update.message.reply_text("Link salvato come [toread]...")
+        try:
+            prompt = TOREAD_PROMPT.replace("{date}", date).replace("{url}", url)
+            message = await client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=512,
+                system=prompt,
+                messages=[{"role": "user", "content": rest or url}],
+            )
+            await save_and_reply(update, message.content[0].text, date)
+        except Exception as e:
+            await update.message.reply_text(f"Errore: {e}")
+        return
+
+    tag, body = extract_tag(text)
+    await update.message.reply_text(f"Strutturando [{tag}]...")
 
     try:
-        content_parts = await build_claude_content(body or update.message.text, None, date)
+        content_parts = await build_claude_content(body or text, None, date)
         message = await client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
