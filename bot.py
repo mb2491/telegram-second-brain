@@ -63,6 +63,23 @@ Usa l'italiano."""
 
 URL_RE = re.compile(r'https?://\S+')
 
+TAG_TO_MOC = {
+    **dict.fromkeys(["vino", "porto", "birra", "spirits", "bevanda", "cocktail"], "MOC - Bevande"),
+    **dict.fromkeys(["libro", "film", "serie", "podcast", "musica", "fumetto"], "MOC - Cultura"),
+    **dict.fromkeys(["viaggio", "luogo", "ristorante", "ricetta", "hotel", "posto"], "MOC - Viaggi"),
+    **dict.fromkeys(["casa", "arredamento", "elettrodomestico", "cucina", "bagno", "giardino", "domotica"], "MOC - Casa"),
+    **dict.fromkeys(["toread"], "MOC - Da leggere"),
+    **dict.fromkeys(["stampa", "todo"], "MOC - Progetti"),
+    **dict.fromkeys(["vittoria"], "MOC - Elucubrazioni"),
+    **dict.fromkeys(["idee", "selfpublish"], "MOC - Self Publishing"),
+}
+_CODE_FENCE_RE = re.compile(r'^```(?:markdown)?\n(.*?)(?:\n```)?$', re.DOTALL)
+
+
+def strip_code_fence(text: str) -> str:
+    m = _CODE_FENCE_RE.match(text.strip())
+    return m.group(1) if m else text
+
 
 def extract_url(text: str) -> tuple[str | None, str]:
     """Estrae il primo URL dal testo. Restituisce (url, testo_rimanente)."""
@@ -111,6 +128,13 @@ async def build_claude_content(text: str | None, photo_bytes: bytes | None, date
     return parts
 
 
+def append_moc_link(content: str, tag: str) -> str:
+    moc = TAG_TO_MOC.get(tag)
+    if moc and f"[[{moc}]]" not in content:
+        content = content.rstrip() + f"\n\n→ [[{moc}]]"
+    return content
+
+
 async def save_and_reply(update: Update, content: str, date: str):
     title_match = re.search(r"^# (.+)$", content, re.MULTILINE)
     title = title_match.group(1) if title_match else "nota"
@@ -144,7 +168,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 system=prompt,
                 messages=[{"role": "user", "content": rest or url}],
             )
-            await save_and_reply(update, message.content[0].text, date)
+            content = append_moc_link(strip_code_fence(message.content[0].text), "toread")
+            await save_and_reply(update, content, date)
         except Exception as e:
             await update.message.reply_text(f"Errore: {e}")
         return
@@ -160,7 +185,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             system=build_prompt(tag, date),
             messages=[{"role": "user", "content": content_parts}],
         )
-        await save_and_reply(update, message.content[0].text, date)
+        await save_and_reply(update, append_moc_link(strip_code_fence(message.content[0].text), tag), date)
     except Exception as e:
         await update.message.reply_text(f"Errore: {e}")
 
@@ -192,7 +217,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             system=build_prompt(tag, date),
             messages=[{"role": "user", "content": content_parts}],
         )
-        await save_and_reply(update, message.content[0].text, date)
+        await save_and_reply(update, append_moc_link(strip_code_fence(message.content[0].text), tag), date)
     except Exception as e:
         await update.message.reply_text(f"Errore: {e}")
 
