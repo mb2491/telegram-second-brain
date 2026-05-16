@@ -8,6 +8,7 @@
   <style>
     body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; }
     h1 { font-size: 1.3rem; margin-bottom: 1.2rem; }
+    h2 { font-size: 1rem; color: #666; margin: 2rem 0 0.8rem; font-weight: 600; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; border-bottom: 2px solid #ddd; padding: 8px 10px; font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: .05em; }
     td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
@@ -34,8 +35,40 @@
 </head>
 <body>
 
-  <h1 id="heading">Da leggere / vedere ({{ pending|length }})</h1>
+  <h1>Second Brain (<span id="total-count">{{ todos|length + media|length }}</span>)</h1>
 
+  {% if todos %}
+  <h2>Todo ({{ todos|length }})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Titolo</th>
+        <th>✓</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for note in todos %}
+      <tr id="row-{{ note.filename }}">
+        <td>{{ note.date }}</td>
+        <td>
+          {% if note.url %}<a href="{{ note.url }}" target="_blank">{{ note.title }}</a>
+          {% else %}{{ note.title }}{% endif %}
+        </td>
+        <td class="check">
+          <input type="checkbox"
+                 hx-post="/done/{{ note.filename }}"
+                 hx-target="#row-{{ note.filename }}"
+                 hx-swap="outerHTML"
+                 hx-on::after-request="updateCount()">
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h2>Da leggere / vedere ({{ media|length }})</h2>
   <table>
     <thead>
       <tr>
@@ -45,9 +78,9 @@
         <th>✓</th>
       </tr>
     </thead>
-    <tbody id="pending-list">
-      {% for note in pending %}
-      <tr id="row-{{ loop.index }}">
+    <tbody id="media-list">
+      {% for note in media %}
+      <tr id="row-{{ note.filename }}">
         <td>{{ note.date }}</td>
         <td><span class="tipo tipo-{{ note.tipo | lower | replace('/', '') | replace(' ', '') }}">{{ note.tipo }}</span></td>
         <td>
@@ -58,7 +91,7 @@
         <td class="check">
           <input type="checkbox"
                  hx-post="/done/{{ note.filename }}"
-                 hx-target="#row-{{ loop.index }}"
+                 hx-target="#row-{{ note.filename }}"
                  hx-swap="outerHTML"
                  hx-on::after-request="updateCount()">
         </td>
@@ -100,8 +133,8 @@
 
   <script>
     function updateCount() {
-      const n = document.querySelectorAll('#pending-list tr[id]').length;
-      document.getElementById('heading').textContent = `Da leggere / vedere (${n})`;
+      const n = document.querySelectorAll('tr[id^="row-"]').length;
+      document.getElementById('total-count').textContent = n;
     }
   </script>
 

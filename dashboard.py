@@ -78,7 +78,10 @@ def _load_notes(status: str) -> list[dict]:
 
 @app.route('/')
 def index():
-    return render_template('index.html', pending=_load_notes('pending'), done=_load_notes('done'))
+    pending = _load_notes('pending')
+    todos = [n for n in pending if n['tipo'] == 'Todo']
+    media = [n for n in pending if n['tipo'] != 'Todo']
+    return render_template('index.html', todos=todos, media=media, done=_load_notes('done'))
 
 
 @app.route('/done/<filename>', methods=['POST'])
