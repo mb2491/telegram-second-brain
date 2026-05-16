@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 import anthropic
+import httpx
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -79,6 +80,20 @@ Poi aggiungi:
 
 ## Note
 (includi solo se l'utente ha aggiunto una descrizione — altrimenti ometti la sezione)
+
+Usa l'italiano."""
+
+TOWATCH_TEXT_PROMPT = """Sei un assistente che crea il corpo di una nota Obsidian per un film o serie TV da guardare.
+NON scrivere il frontmatter YAML — verrà aggiunto separatamente.
+Rispondi SOLO con il corpo della nota, a partire dal titolo.
+
+# Titolo chiaro e descrittivo
+
+## Informazioni principali
+(tipo: Film/Serie, anno se noto, regista/creatore, genere)
+
+## Note personali
+(includi SOLO se l'utente ha scritto opinioni o valutazioni esplicite — altrimenti ometti la sezione)
 
 Usa l'italiano."""
 
@@ -182,6 +197,55 @@ async def save_and_reply(update: Update, content: str, date: str):
     await update.message.reply_text(f"Salvato: {filename}\n\n{preview}")
 
 
+_JW_QUERY = """
+query GetTitleOffers($country: Country!, $language: Language!, $filter: TitleFilter!) {
+  popularTitles(country: $country, first: 1, filter: $filter) {
+    edges {
+      node {
+        ... on Movie {
+          content(country: $country, language: $language) { title }
+          offers(country: $country, platform: WEB) {
+            monetizationType
+            package { clearName }
+          }
+        }
+        ... on Show {
+          content(country: $country, language: $language) { title }
+          offers(country: $country, platform: WEB) {
+            monetizationType
+            package { clearName }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+async def query_justwatch(title: str) -> list[str]:
+    """Cerca piattaforme streaming FLATRATE su JustWatch IT. Ritorna lista vuota in caso di errore."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            resp = await http.post(
+                "https://apis.justwatch.com/graphql",
+                json={
+                    "query": _JW_QUERY,
+                    "variables": {"country": "IT", "language": "it", "filter": {"searchQuery": title}},
+                },
+                headers={"Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            edges = resp.json().get("data", {}).get("popularTitles", {}).get("edges", [])
+            if not edges:
+                return []
+            offers = edges[0]["node"].get("offers", [])
+            platforms = sorted({o["package"]["clearName"] for o in offers if o.get("monetizationType") == "FLATRATE"})
+            return platforms
+    except Exception:
+        return []
+
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(str(update.effective_chat.id)):
         return
@@ -209,17 +273,30 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     tag, body = extract_tag(text)
-    await update.message.reply_text(f"Strutturando [{tag}]...")
+
+    if tag == "towatch":
+        platforms = await query_justwatch(body)
+        plat_note = f" ({', '.join(platforms)})" if platforms else " (non trovato su JustWatch)"
+        await update.message.reply_text(f"Strutturando [towatch]{plat_note}...")
+        platforms_str = "[" + ", ".join(platforms) + "]" if platforms else "[]"
+        frontmatter = f"---\ntags: [towatch]\ndate: {date}\nstatus: pending\nplatforms: {platforms_str}\n---\n\n"
+        system = TOWATCH_TEXT_PROMPT
+    else:
+        await update.message.reply_text(f"Strutturando [{tag}]...")
+        frontmatter = ""
+        system = build_prompt(tag, date)
 
     try:
         content_parts = await build_claude_content(body or text, None, date)
         message = await client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
-            system=build_prompt(tag, date),
+            system=system,
             messages=[{"role": "user", "content": content_parts}],
         )
-        await save_and_reply(update, append_moc_link(strip_code_fence(message.content[0].text), tag), date)
+        body_text = strip_code_fence(message.content[0].text)
+        content = frontmatter + body_text if frontmatter else body_text
+        await save_and_reply(update, append_moc_link(content, tag), date)
     except Exception as e:
         await update.message.reply_text(f"Errore: {e}")
 
