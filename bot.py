@@ -61,7 +61,38 @@ Poi aggiungi:
 
 Usa l'italiano."""
 
+TOWATCH_PROMPT = """Sei un assistente che salva video da guardare in Obsidian (Markdown).
+
+Ricevi un URL YouTube e opzionalmente una descrizione dell'utente.
+Rispondi SOLO con il contenuto markdown, niente altro.
+
+Il frontmatter deve essere ESATTAMENTE:
+---
+tags: [towatch]
+date: {date}
+url: {url}
+status: pending
+---
+
+Poi aggiungi:
+# Titolo descrittivo (deducilo dall'URL o dalla descrizione)
+
+## Note
+(includi solo se l'utente ha aggiunto una descrizione — altrimenti ometti la sezione)
+
+Usa l'italiano."""
+
 URL_RE = re.compile(r'https?://\S+')
+YOUTUBE_DOMAINS = {"youtube.com", "youtu.be", "www.youtube.com", "m.youtube.com"}
+TOREAD_DOMAINS = {"reddit.com", "www.reddit.com", "substack.com"}
+
+
+def url_tag(url: str) -> str:
+    from urllib.parse import urlparse
+    host = urlparse(url).netloc.lower()
+    if host in YOUTUBE_DOMAINS:
+        return "towatch"
+    return "toread"
 
 TAG_TO_MOC = {
     **dict.fromkeys(["vino", "porto", "birra", "spirits", "bevanda", "cocktail"], "MOC - Bevande"),
@@ -69,6 +100,7 @@ TAG_TO_MOC = {
     **dict.fromkeys(["viaggio", "luogo", "ristorante", "ricetta", "hotel", "posto"], "MOC - Viaggi"),
     **dict.fromkeys(["casa", "arredamento", "elettrodomestico", "cucina", "bagno", "giardino", "domotica"], "MOC - Casa"),
     **dict.fromkeys(["toread"], "MOC - Da leggere"),
+    **dict.fromkeys(["towatch"], "MOC - Da vedere"),
     **dict.fromkeys(["stampa", "todo"], "MOC - Progetti"),
     **dict.fromkeys(["vittoria"], "MOC - Elucubrazioni"),
     **dict.fromkeys(["idee", "selfpublish"], "MOC - Self Publishing"),
@@ -159,16 +191,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url, rest = extract_url(text)
     if url:
-        await update.message.reply_text("Link salvato come [toread]...")
+        tag = url_tag(url)
+        prompt_template = TOWATCH_PROMPT if tag == "towatch" else TOREAD_PROMPT
+        await update.message.reply_text(f"Link salvato come [{tag}]...")
         try:
-            prompt = TOREAD_PROMPT.replace("{date}", date).replace("{url}", url)
+            prompt = prompt_template.replace("{date}", date).replace("{url}", url)
             message = await client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=512,
                 system=prompt,
                 messages=[{"role": "user", "content": rest or url}],
             )
-            content = append_moc_link(strip_code_fence(message.content[0].text), "toread")
+            content = append_moc_link(strip_code_fence(message.content[0].text), tag)
             await save_and_reply(update, content, date)
         except Exception as e:
             await update.message.reply_text(f"Errore: {e}")
