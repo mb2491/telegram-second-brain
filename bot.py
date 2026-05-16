@@ -90,7 +90,7 @@ Rispondi SOLO con il corpo della nota, a partire dal titolo.
 # Titolo chiaro e descrittivo
 
 ## Informazioni principali
-(tipo: Film/Serie, anno se noto, regista/creatore, genere)
+(tipo: Film/Serie, anno se noto, regista/creatore, genere — NON includere piattaforme o dove guardarlo)
 
 ## Note personali
 (includi SOLO se l'utente ha scritto opinioni o valutazioni esplicite — altrimenti ometti la sezione)
