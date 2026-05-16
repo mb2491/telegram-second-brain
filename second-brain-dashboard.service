@@ -1,0 +1,12 @@
+[Unit]
+Description=Second Brain Dashboard
+After=network.target
+
+[Service]
+WorkingDirectory=/home/pi/telegram-second-brain
+EnvironmentFile=/home/pi/telegram-second-brain/.env
+ExecStart=/home/pi/telegram-second-brain/venv/bin/python dashboard.py
+Restart=always
+
+[Install]
+WantedBy=default.target
