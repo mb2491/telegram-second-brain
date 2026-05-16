@@ -6,7 +6,7 @@ After=network.target
 WorkingDirectory=/home/pi/telegram-second-brain
 EnvironmentFile=/home/pi/telegram-second-brain/.env
 ExecStart=/home/pi/telegram-second-brain/venv/bin/python dashboard.py
-Restart=always
+Restart=on-failure
 
 [Install]
 WantedBy=default.target
