@@ -21,6 +21,8 @@ _TITLE_RE = re.compile(r'^# (.+)$', re.MULTILINE)
 def _get_tipo(front: dict) -> str:
     tags = front.get('tags', [])
     url = str(front.get('url', ''))
+    if 'todo' in tags:
+        return 'Todo'
     if 'towatch' in tags:
         return 'YouTube' if url else 'Film/Serie'
     if 'toread' in tags:
@@ -49,7 +51,7 @@ def _parse_note(path: Path) -> dict | None:
     except Exception:
         return None
     tags = front.get('tags', [])
-    if not any(t in tags for t in ('toread', 'towatch')):
+    if not any(t in tags for t in ('toread', 'towatch', 'todo')):
         return None
     title_m = _TITLE_RE.search(text)
     platforms = front.get('platforms', [])
@@ -86,8 +88,10 @@ def mark_done(filename):
         return '', 404
     text = path.read_text(encoding='utf-8')
     today = datetime.now().strftime('%Y-%m-%d')
-    text = text.replace('status: pending', f'status: done\ndone_date: {today}', 1)
-    path.write_text(text, encoding='utf-8')
+    new_text = text.replace('status: pending', f'status: done\ndone_date: {today}', 1)
+    if new_text == text:
+        new_text = text.replace('\n---\n', f'\nstatus: done\ndone_date: {today}\n---\n', 1)
+    path.write_text(new_text, encoding='utf-8')
     return ''
 
 

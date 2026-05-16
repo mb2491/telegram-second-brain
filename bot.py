@@ -223,6 +223,16 @@ query GetTitleOffers($country: Country!, $language: Language!, $filter: TitleFil
 """
 
 
+async def fetch_youtube_title(url: str) -> str | None:
+    try:
+        async with httpx.AsyncClient(timeout=5) as http:
+            resp = await http.get(f"https://www.youtube.com/oembed?url={url}&format=json")
+            resp.raise_for_status()
+            return resp.json().get("title")
+    except Exception:
+        return None
+
+
 async def query_justwatch(title: str) -> list[str]:
     """Cerca piattaforme streaming FLATRATE su JustWatch IT. Ritorna lista vuota in caso di errore."""
     try:
@@ -259,12 +269,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt_template = TOWATCH_PROMPT if tag == "towatch" else TOREAD_PROMPT
         await update.message.reply_text(f"Link salvato come [{tag}]...")
         try:
+            user_content = rest or url
+            if tag == "towatch":
+                yt_title = await fetch_youtube_title(url)
+                if yt_title:
+                    user_content = f"Titolo del video: {yt_title}\n{user_content}".strip()
             prompt = prompt_template.replace("{date}", date).replace("{url}", url)
             message = await client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=512,
                 system=prompt,
-                messages=[{"role": "user", "content": rest or url}],
+                messages=[{"role": "user", "content": user_content}],
             )
             content = append_moc_link(strip_code_fence(message.content[0].text), tag)
             await save_and_reply(update, content, date)

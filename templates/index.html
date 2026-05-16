@@ -13,6 +13,7 @@
     td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
     td.check { text-align: center; width: 36px; }
     .tipo { font-size: 0.75rem; background: #f0f0f0; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+    .tipo-todo { background: #fef3c7; color: #92400e; }
     .platforms { color: #999; font-size: 0.8rem; margin-left: 6px; }
     a { color: inherit; text-decoration: none; }
     a:hover { text-decoration: underline; }
@@ -43,7 +44,7 @@
       {% for note in pending %}
       <tr id="row-{{ loop.index }}">
         <td>{{ note.date }}</td>
-        <td><span class="tipo">{{ note.tipo }}</span></td>
+        <td><span class="tipo{% if note.tipo == 'Todo' %} tipo-todo{% endif %}">{{ note.tipo }}</span></td>
         <td>
           {% if note.url %}<a href="{{ note.url }}" target="_blank">{{ note.title }}</a>
           {% else %}{{ note.title }}{% endif %}
