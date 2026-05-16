@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Second Brain</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; }
+    h1 { font-size: 1.3rem; margin-bottom: 1.2rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; border-bottom: 2px solid #ddd; padding: 8px 10px; font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: .05em; }
+    td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    td.check { text-align: center; width: 36px; }
+    .tipo { font-size: 0.75rem; background: #f0f0f0; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+    .platforms { color: #999; font-size: 0.8rem; margin-left: 6px; }
+    a { color: inherit; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    input[type=checkbox] { cursor: pointer; width: 17px; height: 17px; accent-color: #555; }
+    .empty { color: #bbb; text-align: center; padding: 2rem; }
+    details { margin-top: 2.5rem; }
+    summary { cursor: pointer; color: #888; font-size: 0.9rem; user-select: none; }
+    summary:hover { color: #444; }
+    .done-table { margin-top: 1rem; }
+    .done-table td { color: #aaa; font-size: 0.9rem; }
+    .done-table .tipo { background: #f8f8f8; color: #bbb; }
+  </style>
+</head>
+<body>
+
+  <h1 id="heading">Da leggere / vedere ({{ pending|length }})</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Tipo</th>
+        <th>Titolo</th>
+        <th>✓</th>
+      </tr>
+    </thead>
+    <tbody id="pending-list">
+      {% for note in pending %}
+      <tr id="row-{{ loop.index }}">
+        <td>{{ note.date }}</td>
+        <td><span class="tipo">{{ note.tipo }}</span></td>
+        <td>
+          {% if note.url %}<a href="{{ note.url }}" target="_blank">{{ note.title }}</a>
+          {% else %}{{ note.title }}{% endif %}
+          {% if note.platforms %}<span class="platforms">· {{ note.platforms | join(', ') }}</span>{% endif %}
+        </td>
+        <td class="check">
+          <input type="checkbox"
+                 hx-post="/done/{{ note.filename }}"
+                 hx-target="#row-{{ loop.index }}"
+                 hx-swap="outerHTML"
+                 hx-on::after-request="updateCount()">
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">Tutto in pari!</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if done %}
+  <details>
+    <summary>Archivio ({{ done|length }})</summary>
+    <table class="done-table">
+      <thead>
+        <tr>
+          <th>Aggiunto</th>
+          <th>Fatto il</th>
+          <th>Tipo</th>
+          <th>Titolo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for note in done %}
+        <tr>
+          <td>{{ note.date }}</td>
+          <td>{{ note.done_date }}</td>
+          <td><span class="tipo">{{ note.tipo }}</span></td>
+          <td>
+            {% if note.url %}<a href="{{ note.url }}" target="_blank">{{ note.title }}</a>
+            {% else %}{{ note.title }}{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endif %}
+
+  <script>
+    function updateCount() {
+      const n = document.querySelectorAll('#pending-list tr[id]').length;
+      document.getElementById('heading').textContent = `Da leggere / vedere (${n})`;
+    }
+  </script>
+
+</body>
+</html>
