@@ -69,10 +69,16 @@ def _parse_note(path: Path) -> dict | None:
     }
 
 
+_DONE_DIRS = [NOTES_DIR / 'Letto', NOTES_DIR / 'Visto', NOTES_DIR / 'Fatto']
+
+
 def _load_notes(status: str) -> list[dict]:
     if not NOTES_DIR.exists():
         return []
-    notes = [n for p in NOTES_DIR.glob('*.md') if (n := _parse_note(p)) and n['status'] == status]
+    if status == 'done':
+        notes = [n for d in _DONE_DIRS if d.exists() for p in d.glob('*.md') if (n := _parse_note(p))]
+    else:
+        notes = [n for p in NOTES_DIR.glob('*.md') if (n := _parse_note(p)) and n['status'] == status]
     return sorted(notes, key=lambda n: n['date'], reverse=True)
 
 
@@ -90,11 +96,30 @@ def mark_done(filename):
     if not path.exists():
         return '', 404
     text = path.read_text(encoding='utf-8')
+
+    fm = _FRONTMATTER_RE.match(text)
+    tags = []
+    if fm:
+        try:
+            tags = yaml.safe_load(fm.group(1)).get('tags', [])
+        except Exception:
+            pass
+
+    if 'todo' in tags:
+        dest_dir = NOTES_DIR / 'Fatto'
+    elif 'towatch' in tags:
+        dest_dir = NOTES_DIR / 'Visto'
+    else:
+        dest_dir = NOTES_DIR / 'Letto'
+    dest_dir.mkdir(exist_ok=True)
+
     today = datetime.now().strftime('%Y-%m-%d')
     new_text = text.replace('status: pending', f'status: done\ndone_date: {today}', 1)
     if new_text == text:
         new_text = text.replace('\n---\n', f'\nstatus: done\ndone_date: {today}\n---\n', 1)
-    path.write_text(new_text, encoding='utf-8')
+
+    (dest_dir / filename).write_text(new_text, encoding='utf-8')
+    path.unlink()
     return ''
 
 
